@@ -53,3 +53,28 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Zangband build outputs
+/zangband
+/src/lua/tolua
+/src/l-field.c
+/src/l-misc.c
+/src/l-monst.c
+/src/l-object.c
+/src/l-player.c
+/src/l-random.c
+/src/l-spell.c
+/src/l-ui.c
+
+# Autoconf / legacy build artifacts
+config.log
+config.status
+config.cache
+*.bak
+gmon.out
+/.default_path
+/.makefiles
+
+# Editor / OS junk
+.DS_Store
+*.swp

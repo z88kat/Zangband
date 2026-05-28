@@ -1,0 +1,97 @@
+# Makefile.macarm — Build Zangband (2005 source) on macOS / Apple Silicon
+#
+# Usage (from src/):
+#   make -f Makefile.macarm           # build ../zangband
+#   make -f Makefile.macarm clean
+#
+# Only the ncurses (USE_GCU) port is enabled. All other main-*.c files
+# guard themselves with their own USE_xxx defines and will compile to
+# empty objects.
+
+CC      := clang
+LUA     := lua/
+
+# We deliberately silence the strict warning fortress this project was
+# tuned for in 2005 — modern Clang turns many of those into errors.
+# -fcommon restores pre-GCC-10 behavior of tentative-definition merging,
+# which this codebase relies on (multiple `int foo;` without `extern`).
+CFLAGS  := -DUSE_GCU \
+           -DSIZEOF_LONG_INT=8 \
+           -O2 -g \
+           -Wno-everything \
+           -fcommon \
+           -D_DARWIN_C_SOURCE
+
+LIBS    := -lncurses
+
+# ---------- Lua runtime objects (linked into zangband and into tolua) ----------
+LUAOBJS := $(addprefix $(LUA), \
+    lapi.o ldebug.o lmem.o lstrlib.o lvm.o \
+    tolua_lb.o lauxlib.o ldo.o lobject.o ltable.o \
+    lzio.o tolua_rg.o lbaselib.o lfunc.o lparser.o \
+    ltests.o tolua_bd.o tolua_tm.o lcode.o lgc.o \
+    lstate.o ltm.o tolua_eh.o tolua_tt.o ldblib.o \
+    llex.o lstring.o lundump.o tolua_gp.o)
+
+# ---------- Extra objects only needed to build the tolua tool ----------
+TOLUAOBJS := $(addprefix $(LUA),tolua.o tolualua.o liolib.o) $(LUAOBJS)
+
+# ---------- Generated Lua-binding wrappers (built from l-*.pkg) ----------
+LUAWSRCS := l-monst.c l-object.c l-player.c l-random.c \
+            l-ui.c l-misc.c l-spell.c l-field.c
+LUAWOBJS := $(LUAWSRCS:.c=.o)
+
+# ---------- Game objects (mirrors makefile.std ANGOBJS) ----------
+ANGOBJS := $(LUAWOBJS) \
+    variable.o tables.o util.o cave.o \
+    object1.o object2.o monster1.o monster2.o \
+    xtra1.o xtra2.o spells1.o spells2.o \
+    melee1.o melee2.o save.o files.o fields.o \
+    cmd1.o cmd2.o cmd3.o cmd4.o cmd5.o cmd6.o \
+    store.o birth.o load.o ui.o \
+    wizard1.o wizard2.o grid.o streams.o rooms.o \
+    generate.o dungeon.o init1.o init2.o \
+    effects.o quest.o racial.o run.o script.o \
+    artifact.o mutation.o flavor.o spells3.o \
+    mspells1.o mspells2.o scores.o mind.o maid-x11.o \
+    bldg.o obj_kind.o wild1.o wild2.o wild3.o avatar.o notes.o \
+    main-cap.o main-gcu.o main-x11.o main-xaw.o main-xpj.o \
+    main-lsl.o main-vcs.o main-gtk.o main-win.o main.o \
+    maid-grf.o main-dos.o main-ibm.o main-emx.o \
+    main-ami.o main-tnb.o
+
+ZUTILOBJS := z-util.o z-virt.o z-form.o z-rand.o z-term.o
+
+# Borg (auto-player) sources. Required because z-config.h defines ALLOW_BORG.
+BORGOBJS := zborg1.o zborg2.o zborg3.o zborg4.o zborg5.o \
+            zborg6.o zborg7.o zborg8.o zborg9.o \
+            zbmagic1.o zbmagic2.o zbmagic3.o
+
+OBJS := $(ANGOBJS) $(ZUTILOBJS) $(BORGOBJS) $(LUAOBJS)
+
+# ---------- Build rules ----------
+.PHONY: all clean
+
+all: ../zangband
+
+../zangband: $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+$(LUA)tolua: $(TOLUAOBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Generate l-foo.c from l-foo.pkg using tolua
+# $* expands to "l-foo"; $(subst l-,,$*) drops the leading "l-".
+$(LUAWSRCS): %.c: %.pkg $(LUA)tolua
+	$(LUA)tolua -n $(subst l-,,$*) -o $@ $<
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	rm -f *.o $(LUA)*.o $(LUAWSRCS) $(LUA)tolua ../zangband
+
+# Mark Borg files as depending on grouping headers (matches makefile.std)
+zborg1.o zborg2.o zborg3.o zborg4.o zborg5.o \
+zborg6.o zborg7.o zborg8.o zborg9.o \
+zbmagic1.o zbmagic2.o zbmagic3.o: maid-grf.h
